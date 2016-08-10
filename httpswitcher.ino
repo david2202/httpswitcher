@@ -69,6 +69,7 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ
                                          SPI_CLOCK_DIVIDER); // you can change this clock speed
 
 #define WLAN_SSID       "NETGEAR26"   // cannot be longer than 32 characters!
+//#define WLAN_SSID       "XT1068 4797"   // cannot be longer than 32 characters!
 #define WLAN_PASS       "rockycurtain281"
 // Security can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
 #define WLAN_SECURITY   WLAN_SEC_WPA2
@@ -107,6 +108,10 @@ void setup(void) {
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
 
+  updateLights(255);
+  delay(1000);
+  updateLights(0);
+    
   Serial.println(F("Hello, CC3000!\n")); 
 
   Serial.print("Free RAM: "); Serial.println(getFreeRam(), DEC);
@@ -115,8 +120,8 @@ void setup(void) {
   Serial.println(F("\nInitializing..."));
   cc3000.reboot();
   delay(1000);
-  if (!cc3000.begin())
-  {
+  updateLights(1);
+  if (!cc3000.begin()) {
     Serial.println(F("Couldn't begin()! Check your wiring?"));
     while(1);
   }
@@ -126,23 +131,27 @@ void setup(void) {
 //    Serial.println(F("Failed!"));
 //    while(1);
 //  }
+  updateLights(3);
   if (!cc3000.setDHCP()) {
     Serial.println(F("Failed to set DHCP!"));
     while(1);
   }
   Serial.print(F("\nAttempting to connect to ")); Serial.println(WLAN_SSID);
+  updateLights(7);
   if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY)) {
     Serial.println(F("Failed!"));
     while(1);
   }
    
   Serial.println(F("Connected!"));
+  updateLights(15);
   while (!cc3000.checkDHCP())
   {
     Serial.println(F("Request DHCP"));
     delay(1000); // ToDo: Insert a DHCP timeout!
   }  
 
+  updateLights(31);
   if (!cc3000.checkDHCP()) {
     displayConnectionDetails();
     Serial.println(F("DHCP failed. Disconnecting."));
@@ -151,6 +160,7 @@ void setup(void) {
   }
   
   // Display the IP address DNS, Gateway, etc.
+  updateLights(63);
   while (! displayConnectionDetails()) {
     Serial.println(F("Waiting on connection details."));
     delay(1000);
@@ -166,10 +176,11 @@ void setup(void) {
   Serial.println(F("there isn't an obvious moment to disconnect with a server.\r\n"));
   
   // Start listening for connections
+  updateLights(127);
   httpServer.begin();
   
   Serial.println(F("Listening for connections..."));
-
+  updateLights(0);
 }
 
 void loop(void)
@@ -208,19 +219,6 @@ void loop(void)
       Serial.print(F("Path: ")); Serial.println(path);
       // Check the action to see if it was a GET request.
       if (strcmp(action, "GET") == 0) {
-        // Respond with the path that was accessed.
-        // First send the success response code.
-        client.fastrprintln(F("HTTP/1.1 200 OK"));
-        // Then send a few headers to identify the type of data returned and that
-        // the connection will not be held open.
-        client.fastrprintln(F("Content-Type: text/plain"));
-        client.fastrprintln(F("Connection: close"));
-        client.fastrprintln(F("Server: Adafruit CC3000"));
-        // Send an empty line to signal start of body.
-        client.fastrprintln(F(""));
-        // Now send the response data.
-        client.fastrprintln(F("Hello world!"));
-        client.fastrprint(F("You accessed path: ")); client.fastrprintln(path);
         String argument = String(path);
         argument.remove(0, 1);
         Serial.print(F("Argument: ")); Serial.println(argument);
@@ -231,6 +229,27 @@ void loop(void)
           shiftOut(dataPin, clockPin, LSBFIRST, val);
           digitalWrite(latchPin, LOW);
           digitalWrite(latchPin, HIGH);
+          // Respond with the path that was accessed.
+          // First send the success response code.
+          client.fastrprintln(F("HTTP/1.1 200 OK"));
+          // Then send a few headers to identify the type of data returned and that
+          // the connection will not be held open.
+          client.fastrprintln(F("Content-Type: text/plain"));
+          client.fastrprintln(F("Connection: close"));
+          client.fastrprintln(F("Server: Adafruit CC3000"));
+          // Send an empty line to signal start of body.
+          client.fastrprintln(F(""));
+          // Now send the response data.
+          char argumentChar[argument.length() + 1];
+          argument.toCharArray(argumentChar, argument.length() + 1);
+          client.fastrprint(F("{light: "));
+          client.fastrprint(argumentChar);
+          client.fastrprintln(F("}"));
+        } else {
+          Serial.println(F("Invalid request"));
+          // Unsupported action, respond with an HTTP 405 method not allowed error.
+          client.fastrprintln(F("HTTP/1.1 400 Bad Request"));
+          client.fastrprintln(F(""));
         }
       } else {
         // Unsupported action, respond with an HTTP 405 method not allowed error.
@@ -303,3 +322,10 @@ bool displayConnectionDetails(void)
     return true;
   }
 }
+
+void updateLights(byte val) {
+  shiftOut(dataPin, clockPin, LSBFIRST, val);
+  digitalWrite(latchPin, LOW);
+  digitalWrite(latchPin, HIGH);
+}
+
